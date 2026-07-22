@@ -1,4 +1,6 @@
 import os
+import re
+import html
 import requests
 import xml.etree.ElementTree as ET
 from xml.dom import minidom
@@ -9,134 +11,305 @@ ACCESS_TOKEN = os.environ["SHOPIFY_ACCESS_TOKEN"]
 
 
 API_VERSION = "2025-01"
-URL = f"https://{SHOPIFY_STORE}/admin/api/{API_VERSION}/products.json"
+URL = f"https://{SHOPIFY_STORE}/admin/api/{API_VERSION}/graphql.json"
 
 
-headers = {
+HEADERS = {
     "X-Shopify-Access-Token": ACCESS_TOKEN,
     "Content-Type": "application/json"
 }
 
 
-root = ET.Element("Products")
+QUERY = """
+query GetProducts($cursor: String) {
+  products(
+    first: 100
+    after: $cursor
+    query: "status:ACTIVE"
+  ) {
+    pageInfo {
+      hasNextPage
+      endCursor
+    }
 
 
-params = {
-    "limit": 250,
-    "status": "active"
+    nodes {
+      title
+      handle
+      vendor
+      descriptionHtml
+
+
+      category {
+        name
+        fullName
+      }
+
+
+      images(first: 10) {
+        nodes {
+          url
+        }
+      }
+
+
+      variants(first: 100) {
+        nodes {
+          sku
+          price
+          image {
+            url
+          }
+        }
+      }
+    }
+  }
 }
+"""
 
 
-products = []
 
 
-while True:
-    response = requests.get(URL, headers=headers, params=params)
-    response.raise_for_status()
+def clean_description(description):
+    if not description:
+        return ""
 
 
-    data = response.json()
-    products.extend(data.get("products", []))
+    description = html.unescape(description)
+    description = re.sub(r"<[^>]+>", " ", description)
+    description = re.sub(r"\s+", " ", description)
 
 
-    link_header = response.headers.get("Link", "")
+    return description.strip()
 
 
-    if 'rel="next"' not in link_header:
-        break
 
 
-    next_url = None
+def get_category(product):
+    category = product.get("category")
 
 
-    for link in link_header.split(","):
-        if 'rel="next"' in link:
-            next_url = link.split(";")[0].strip().strip("<>")
+    if not category:
+        return "Computer Software"
+
+
+    full_name = category.get("fullName")
+    name = category.get("name")
+
+
+    if full_name:
+        # Shopify format:
+        # "Network Software in Computer Software"
+        if " in " in full_name:
+            parts = full_name.split(" in ")
+
+
+            # Reverse the order:
+            # Network Software in Computer Software
+            # becomes:
+            # Computer Software > Network Software
+            parts.reverse()
+
+
+            return " > ".join(part.strip() for part in parts)
+
+
+        return full_name
+
+
+    return name or "Computer Software"
+
+
+
+
+def get_products():
+    products = []
+    cursor = None
+
+
+    while True:
+
+
+        response = requests.post(
+            URL,
+            headers=HEADERS,
+            json={
+                "query": QUERY,
+                "variables": {
+                    "cursor": cursor
+                }
+            }
+        )
+
+
+        response.raise_for_status()
+
+
+        data = response.json()
+
+
+        if "errors" in data:
+            raise Exception(data["errors"])
+
+
+        product_data = data["data"]["products"]
+
+
+        products.extend(product_data["nodes"])
+
+
+        page_info = product_data["pageInfo"]
+
+
+        if not page_info["hasNextPage"]:
             break
 
 
-    if not next_url:
-        break
+        cursor = page_info["endCursor"]
 
 
-    URL = next_url
-    params = {}
+    return products
 
 
-for product in products:
 
 
-    for variant in product.get("variants", []):
+def add_field(parent, name, value):
+    element = ET.SubElement(parent, name)
+    element.text = str(value or "")
+    return element
 
 
-        offer = ET.SubElement(root, "Offer")
 
 
-        def add_field(name, value):
-            element = ET.SubElement(offer, name)
-            element.text = str(value or "")
-            return element
+def generate_feed():
+
+
+    products = get_products()
+
+
+    root = ET.Element("Products")
+
+
+    total_offers = 0
+
+
+    for product in products:
 
 
         title = product.get("title", "")
         vendor = product.get("vendor", "")
-
-
-        description = product.get("body_html", "")
-        description = description.replace("<", " ").replace(">", " ")
-
-
-        price = variant.get("price", "0")
-        sku = variant.get("sku") or str(variant.get("id"))
-
-
         handle = product.get("handle", "")
+
+
+        description = clean_description(
+            product.get("descriptionHtml", "")
+        )
+
+
+        category = get_category(product)
+
+
         product_url = f"https://saivera.net/products/{handle}"
 
 
-        inventory_quantity = variant.get("inventory_quantity", 0)
+        images = product.get("images", {}).get("nodes", [])
 
 
-        stock = "disponibile" if inventory_quantity > 0 else "non disponibile"
+        default_image = ""
 
 
-        image = ""
+        if images:
+            default_image = images[0].get("url", "")
 
 
-        if variant.get("image_id"):
-            for product_image in product.get("images", []):
-                if product_image.get("id") == variant.get("image_id"):
-                    image = product_image.get("src", "")
-                    break
+        variants = product.get("variants", {}).get("nodes", [])
 
 
-        if not image and product.get("images"):
-            image = product["images"][0].get("src", "")
+        for variant in variants:
 
 
-        add_field("Name", title)
-        add_field("Brand", vendor)
-        add_field("Description", description)
-        add_field("Price", price)
-        add_field("Code", sku)
-        add_field("Link", product_url)
-        add_field("Stock", stock)
-        add_field("Categories", "Software")
-        add_field("Image", image)
-        add_field("ShippingCost", "0")
+            offer = ET.SubElement(root, "Offer")
 
 
-xml_string = ET.tostring(root, encoding="utf-8")
+            sku = variant.get("sku")
 
 
-pretty_xml = minidom.parseString(xml_string).toprettyxml(
-    indent="  ",
-    encoding="UTF-8"
-)
+            if not sku:
+                sku = title
 
 
-with open("trovaprezzi.xml", "wb") as file:
-    file.write(pretty_xml)
+            image = default_image
 
 
-print(f"Feed generated successfully with {len(products)} products.")
+            variant_image = variant.get("image")
+
+
+            if variant_image:
+                image = variant_image.get("url", "")
+
+
+            price = variant.get("price", "0")
+
+
+            add_field(offer, "Name", title)
+            add_field(offer, "Brand", vendor)
+            add_field(offer, "Description", description)
+            add_field(offer, "Price", price)
+            add_field(offer, "Code", sku)
+            add_field(offer, "Link", product_url)
+
+
+            # All ACTIVE products are considered available
+            add_field(offer, "Stock", "disponibile")
+
+
+            add_field(offer, "Categories", category)
+            add_field(offer, "Image", image)
+            add_field(offer, "ShippingCost", "0")
+
+
+            total_offers += 1
+
+
+    xml_string = ET.tostring(
+        root,
+        encoding="utf-8"
+    )
+
+
+    pretty_xml = minidom.parseString(
+        xml_string
+    ).toprettyxml(
+        indent="  ",
+        encoding="UTF-8"
+    )
+
+
+    with open(
+        "trovaprezzi.xml",
+        "wb"
+    ) as file:
+
+
+        file.write(pretty_xml)
+
+
+    print(
+        f"Feed generated successfully."
+    )
+
+
+    print(
+        f"Active products: {len(products)}"
+    )
+
+
+    print(
+        f"Total offers: {total_offers}"
+    )
+
+
+
+
+if __name__ == "__main__":
+    generate_feed()
