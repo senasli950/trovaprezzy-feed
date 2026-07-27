@@ -8,11 +8,6 @@ from xml.dom import minidom
 
 
 
-# =========================
-# SHOPIFY CONFIGURATION
-# =========================
-
-
 SHOPIFY_STORE = "it3u3i-5e.myshopify.com"
 ACCESS_TOKEN = os.environ["SHOPIFY_ACCESS_TOKEN"]
 
@@ -34,15 +29,7 @@ HEADERS = {
 
 
 
-# =========================
-# BRAND RULES
-# =========================
-
-
 BRAND_RULES = [
-
-
-    # Microsoft products
     ("xbox game pass", "Microsoft"),
     ("microsoft office", "Microsoft"),
     ("office 365", "Microsoft"),
@@ -60,7 +47,6 @@ BRAND_RULES = [
     ("minecraft", "Microsoft"),
 
 
-    # Antivirus and VPN
     ("kaspersky", "Kaspersky"),
     ("norton", "Norton"),
     ("mcafee", "McAfee"),
@@ -74,7 +60,6 @@ BRAND_RULES = [
     ("expressvpn", "ExpressVPN"),
 
 
-    # Software
     ("adobe", "Adobe"),
     ("photoshop", "Adobe"),
     ("acrobat", "Adobe"),
@@ -83,12 +68,10 @@ BRAND_RULES = [
     ("coreldraw", "Corel"),
 
 
-    # Subscriptions
     ("youtube premium", "Google"),
     ("google one", "Google"),
 
 
-    # Games and publishers
     ("ea sports fc", "Electronic Arts"),
     ("fifa", "Electronic Arts"),
     ("resident evil", "Capcom"),
@@ -99,11 +82,6 @@ BRAND_RULES = [
 ]
 
 
-
-
-# =========================
-# GRAPHQL QUERY
-# =========================
 
 
 QUERY = """
@@ -138,6 +116,12 @@ query GetProducts($cursor: String) {
       }
 
 
+      translations(locale: "it") {
+        key
+        value
+      }
+
+
       images(first: 10) {
         nodes {
           url
@@ -164,9 +148,28 @@ query GetProducts($cursor: String) {
 
 
 
-# =========================
-# BRAND DETECTION
-# =========================
+def get_translations(product):
+
+
+    translations = {}
+
+
+    for translation in product.get("translations", []):
+
+
+        key = translation.get("key")
+        value = translation.get("value")
+
+
+        if key and value:
+
+
+            translations[key] = value
+
+
+    return translations
+
+
 
 
 def detect_brand(title, vendor):
@@ -175,36 +178,32 @@ def detect_brand(title, vendor):
     title_lower = title.lower()
 
 
-    # More specific rules are checked first
     for keyword, brand in BRAND_RULES:
 
 
         if keyword in title_lower:
+
+
             return brand
 
 
-    # If no rule matches, use Shopify Vendor
     if vendor and vendor.strip():
 
 
         return vendor.strip()
 
 
-    # Final fallback
     return "SAIVERA"
 
 
-
-
-# =========================
-# DESCRIPTION CLEANING
-# =========================
 
 
 def clean_description(description):
 
 
     if not description:
+
+
         return ""
 
 
@@ -230,11 +229,6 @@ def clean_description(description):
 
 
 
-# =========================
-# CATEGORY
-# =========================
-
-
 def get_category(product):
 
 
@@ -248,21 +242,10 @@ def get_category(product):
 
 
     full_name = category.get("fullName")
-
-
     name = category.get("name")
 
 
     if full_name:
-
-
-        # Example:
-        #
-        # Network Software in Computer Software
-        #
-        # Becomes:
-        #
-        # Computer Software > Network Software
 
 
         if " in " in full_name:
@@ -286,11 +269,6 @@ def get_category(product):
     return name or "Computer Software"
 
 
-
-
-# =========================
-# GET ACTIVE PRODUCTS
-# =========================
 
 
 def get_products():
@@ -380,11 +358,6 @@ def get_products():
 
 
 
-# =========================
-# XML FIELD
-# =========================
-
-
 def add_field(parent, name, value):
 
 
@@ -404,11 +377,6 @@ def add_field(parent, name, value):
 
 
 
-# =========================
-# GENERATE FEED
-# =========================
-
-
 def generate_feed():
 
 
@@ -426,9 +394,38 @@ def generate_feed():
     for product in products:
 
 
-        title = product.get(
+        translations = get_translations(
+            product
+        )
+
+
+        original_title = product.get(
             "title",
             ""
+        )
+
+
+        original_description = product.get(
+            "descriptionHtml",
+            ""
+        )
+
+
+        # Shopify Translate & Adapt translation keys
+        title = translations.get(
+            "title",
+            original_title
+        )
+
+
+        description_html = translations.get(
+            "body_html",
+            original_description
+        )
+
+
+        description = clean_description(
+            description_html
         )
 
 
@@ -444,20 +441,8 @@ def generate_feed():
         )
 
 
-        description = clean_description(
-
-
-            product.get(
-                "descriptionHtml",
-                ""
-            )
-
-
-        )
-
-
         brand = detect_brand(
-            title,
+            original_title,
             vendor
         )
 
@@ -491,23 +476,15 @@ def generate_feed():
 
 
             default_image = (
-
-
                 images[0]
                 .get("url", "")
-
-
             )
 
 
         variants = (
-
-
             product
             .get("variants", {})
             .get("nodes", [])
-
-
         )
 
 
@@ -547,13 +524,9 @@ def generate_feed():
 
 
             variant_image = (
-
-
                 variant.get(
                     "image"
                 )
-
-
             )
 
 
@@ -561,163 +534,78 @@ def generate_feed():
 
 
                 image = (
-
-
                     variant_image
                     .get("url", "")
-
-
                 )
 
 
             add_field(
-
-
                 offer,
-
-
                 "Name",
-
-
                 title
-
-
             )
 
 
             add_field(
-
-
                 offer,
-
-
                 "Brand",
-
-
                 brand
-
-
             )
 
 
             add_field(
-
-
                 offer,
-
-
                 "Description",
-
-
                 description
-
-
             )
 
 
             add_field(
-
-
                 offer,
-
-
                 "Price",
-
-
                 price
-
-
             )
 
 
             add_field(
-
-
                 offer,
-
-
                 "Code",
-
-
                 sku
-
-
             )
 
 
             add_field(
-
-
                 offer,
-
-
                 "Link",
-
-
                 product_url
-
-
             )
 
 
-            # All ACTIVE products are available
             add_field(
-
-
                 offer,
-
-
                 "Stock",
-
-
                 "disponibile"
-
-
             )
 
 
             add_field(
-
-
                 offer,
-
-
                 "Categories",
-
-
                 category
-
-
             )
 
 
             add_field(
-
-
                 offer,
-
-
                 "Image",
-
-
                 image
-
-
             )
 
 
             add_field(
-
-
                 offer,
-
-
                 "ShippingCost",
-
-
                 "0"
-
-
             )
 
 
@@ -725,14 +613,8 @@ def generate_feed():
 
 
     xml_string = ET.tostring(
-
-
         root,
-
-
         encoding="utf-8"
-
-
     )
 
 
@@ -740,26 +622,12 @@ def generate_feed():
 
 
         minidom
-
-
         .parseString(
-
-
             xml_string
-
-
         )
-
-
         .toprettyxml(
-
-
             indent="  ",
-
-
             encoding="UTF-8"
-
-
         )
 
 
@@ -779,38 +647,22 @@ def generate_feed():
 
 
         file.write(
-
-
             pretty_xml
-
-
         )
 
 
     print(
-
-
         "Feed generated successfully."
-
-
     )
 
 
     print(
-
-
         f"Active products: {len(products)}"
-
-
     )
 
 
     print(
-
-
         f"Total offers: {total_offers}"
-
-
     )
 
 
