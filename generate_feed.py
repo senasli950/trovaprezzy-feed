@@ -455,7 +455,7 @@ def generate_feed():
         product_url = (
 
 
-            "https://saivera.net/products/"
+            "https://saivera.net/it/products/"
             + handle
 
 
