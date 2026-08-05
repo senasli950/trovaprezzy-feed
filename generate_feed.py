@@ -81,6 +81,13 @@ BRAND_RULES = [
     ("007: first light", "IO Interactive"),
 ]
 
+CATEGORY_RULES = {
+    "XBOX-GPE1": "Abbonamenti Gaming",
+    "XBOX-GPU3": "Abbonamenti Gaming",
+    "XBOX-GPU1": "Abbonamenti Gaming",
+    "XBOX-GPE3": "Abbonamenti Gaming",
+}
+
 
 
 
@@ -232,12 +239,19 @@ def clean_description(description):
 def get_category(product):
 
 
+    title = product.get("title", "").strip()
+
+
+    # استخدم التصنيف المخصص إذا كان موجودًا
+    if title in CATEGORY_RULES:
+        return CATEGORY_RULES[title]
+
+
+    # وإلا استخدم تصنيف Shopify
     category = product.get("category")
 
 
     if not category:
-
-
         return "Computer Software"
 
 
@@ -252,8 +266,6 @@ def get_category(product):
 
 
             parts = full_name.split(" in ")
-
-
             parts.reverse()
 
 
