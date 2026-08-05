@@ -239,12 +239,37 @@ def clean_description(description):
 def get_category(product):
 
 
-    title = product.get("title", "").strip()
+    category = product.get("category")
 
 
-    # استخدم التصنيف المخصص إذا كان موجودًا
-    if title in CATEGORY_RULES:
-        return CATEGORY_RULES[title]
+    if not category:
+        return "Computer Software"
+
+
+    full_name = category.get("fullName")
+    name = category.get("name")
+
+
+    if full_name:
+
+
+        if " in " in full_name:
+
+
+            parts = full_name.split(" in ")
+            parts.reverse()
+
+
+            return " > ".join(
+                part.strip()
+                for part in parts
+            )
+
+
+        return full_name
+
+
+    return name or "Computer Software"
 
 
     # وإلا استخدم تصنيف Shopify
@@ -459,11 +484,6 @@ def generate_feed():
         )
 
 
-        category = get_category(
-            product
-        )
-
-
         product_url = (
 
 
@@ -519,7 +539,10 @@ def generate_feed():
                 "sku"
             )
 
-
+            category = CATEGORY_RULES.get(
+                sku,
+                get_category(product)
+            )
             if not sku:
 
 
