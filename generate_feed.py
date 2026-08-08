@@ -6,27 +6,20 @@ import xml.etree.ElementTree as ET
 from xml.dom import minidom
 
 
-
-
 SHOPIFY_STORE = "it3u3i-5e.myshopify.com"
 ACCESS_TOKEN = os.environ["SHOPIFY_ACCESS_TOKEN"]
 
-
 API_VERSION = "2025-01"
-
 
 URL = (
     f"https://{SHOPIFY_STORE}"
     f"/admin/api/{API_VERSION}/graphql.json"
 )
 
-
 HEADERS = {
     "X-Shopify-Access-Token": ACCESS_TOKEN,
     "Content-Type": "application/json"
 }
-
-
 
 
 BRAND_RULES = [
@@ -46,7 +39,6 @@ BRAND_RULES = [
     ("windows", "Microsoft"),
     ("minecraft", "Microsoft"),
 
-
     ("kaspersky", "Kaspersky"),
     ("norton", "Norton"),
     ("mcafee", "McAfee"),
@@ -59,7 +51,6 @@ BRAND_RULES = [
     ("cyberghost", "CyberGhost"),
     ("expressvpn", "ExpressVPN"),
 
-
     ("adobe", "Adobe"),
     ("photoshop", "Adobe"),
     ("acrobat", "Adobe"),
@@ -67,10 +58,8 @@ BRAND_RULES = [
     ("autocad", "Autodesk"),
     ("coreldraw", "Corel"),
 
-
     ("youtube premium", "Google"),
     ("google one", "Google"),
-
 
     ("ea sports fc", "Electronic Arts"),
     ("fifa", "Electronic Arts"),
@@ -81,6 +70,8 @@ BRAND_RULES = [
     ("007: first light", "IO Interactive"),
 ]
 
+
+# Custom Trovaprezzi categories based on SKU
 CATEGORY_RULES = {
     "XBOX-GPE1": "Abbonamenti Gaming",
     "XBOX-GPU3": "Abbonamenti Gaming",
@@ -89,11 +80,8 @@ CATEGORY_RULES = {
 }
 
 
-
-
 QUERY = """
 query GetProducts($cursor: String) {
-
 
   products(
     first: 100
@@ -101,33 +89,27 @@ query GetProducts($cursor: String) {
     query: "status:ACTIVE"
   ) {
 
-
     pageInfo {
       hasNextPage
       endCursor
     }
 
-
     nodes {
-
 
       title
       handle
       vendor
       descriptionHtml
 
-
       category {
         name
         fullName
       }
 
-
       translations(locale: "it") {
         key
         value
       }
-
 
       images(first: 10) {
         nodes {
@@ -135,12 +117,10 @@ query GetProducts($cursor: String) {
         }
       }
 
-
       variants(first: 100) {
         nodes {
           sku
           price
-
 
           image {
             url
@@ -153,69 +133,42 @@ query GetProducts($cursor: String) {
 """
 
 
-
-
 def get_translations(product):
-
 
     translations = {}
 
-
     for translation in product.get("translations", []):
-
 
         key = translation.get("key")
         value = translation.get("value")
 
-
         if key and value:
-
-
             translations[key] = value
-
 
     return translations
 
 
-
-
 def detect_brand(title, vendor):
-
 
     title_lower = title.lower()
 
-
     for keyword, brand in BRAND_RULES:
 
-
         if keyword in title_lower:
-
-
             return brand
 
-
     if vendor and vendor.strip():
-
-
         return vendor.strip()
-
 
     return "SAIVERA"
 
 
-
-
 def clean_description(description):
 
-
     if not description:
-
-
         return ""
 
-
     description = html.unescape(description)
-
 
     description = re.sub(
         r"<[^>]+>",
@@ -223,439 +176,233 @@ def clean_description(description):
         description
     )
 
-
     description = re.sub(
         r"\s+",
         " ",
         description
     )
 
-
     return description.strip()
-
-
 
 
 def get_category(product):
 
-
     category = product.get("category")
-
 
     if not category:
         return "Computer Software"
 
-
     full_name = category.get("fullName")
     name = category.get("name")
 
-
     if full_name:
-
 
         if " in " in full_name:
 
-
             parts = full_name.split(" in ")
             parts.reverse()
-
 
             return " > ".join(
                 part.strip()
                 for part in parts
             )
 
-
         return full_name
-
 
     return name or "Computer Software"
 
 
-    # وإلا استخدم تصنيف Shopify
-    category = product.get("category")
+def get_category_for_variant(product, sku):
 
+    if sku and sku in CATEGORY_RULES:
+        return CATEGORY_RULES[sku]
 
-    if not category:
-        return "Computer Software"
-
-
-    full_name = category.get("fullName")
-    name = category.get("name")
-
-
-    if full_name:
-
-
-        if " in " in full_name:
-
-
-            parts = full_name.split(" in ")
-            parts.reverse()
-
-
-            return " > ".join(
-                part.strip()
-                for part in parts
-            )
-
-
-        return full_name
-
-
-    return name or "Computer Software"
-
-
+    return get_category(product)
 
 
 def get_products():
 
-
     products = []
-
 
     cursor = None
 
-
     while True:
 
-
         response = requests.post(
-
-
             URL,
-
-
             headers=HEADERS,
-
-
             json={
-
-
                 "query": QUERY,
-
-
                 "variables": {
-
-
                     "cursor": cursor
-
-
                 }
-
-
             }
-
-
         )
-
 
         response.raise_for_status()
 
-
         data = response.json()
 
-
         if "errors" in data:
+            raise Exception(data["errors"])
 
-
-            raise Exception(
-                data["errors"]
-            )
-
-
-        product_data = (
-            data["data"]["products"]
-        )
-
+        product_data = data["data"]["products"]
 
         products.extend(
             product_data["nodes"]
         )
 
-
-        page_info = (
-            product_data["pageInfo"]
-        )
-
+        page_info = product_data["pageInfo"]
 
         if not page_info["hasNextPage"]:
-
-
             break
 
-
-        cursor = (
-            page_info["endCursor"]
-        )
-
+        cursor = page_info["endCursor"]
 
     return products
 
 
-
-
 def add_field(parent, name, value):
-
 
     element = ET.SubElement(
         parent,
         name
     )
 
-
     element.text = str(
         value or ""
     )
 
-
     return element
 
 
+def generate_offer(
+    root,
+    product,
+    variant,
+    title,
+    description,
+    product_url,
+    brand
+):
 
+    offer = ET.SubElement(
+        root,
+        "Offer"
+    )
 
-def generate_feed():
+    sku = variant.get("sku")
 
+    if not sku:
+        sku = title
 
-    products = get_products()
+    price = variant.get(
+        "price",
+        "0"
+    )
 
+    images = (
+        product
+        .get("images", {})
+        .get("nodes", [])
+    )
 
-    root = ET.Element(
-        "Products"
+    default_image = ""
+
+    if images:
+
+        default_image = (
+            images[0]
+            .get("url", "")
+        )
+
+    image = default_image
+
+    variant_image = variant.get(
+        "image"
+    )
+
+    if variant_image:
+
+        image = variant_image.get(
+            "url",
+            ""
+        )
+
+    category = get_category_for_variant(
+        product,
+        sku
+    )
+
+    add_field(
+        offer,
+        "Name",
+        title
+    )
+
+    add_field(
+        offer,
+        "Brand",
+        brand
+    )
+
+    add_field(
+        offer,
+        "Description",
+        description
+    )
+
+    add_field(
+        offer,
+        "Price",
+        price
+    )
+
+    add_field(
+        offer,
+        "Code",
+        sku
+    )
+
+    add_field(
+        offer,
+        "Link",
+        product_url
+    )
+
+    add_field(
+        offer,
+        "Stock",
+        "disponibile"
+    )
+
+    add_field(
+        offer,
+        "Categories",
+        category
+    )
+
+    add_field(
+        offer,
+        "Image",
+        image
+    )
+
+    add_field(
+        offer,
+        "ShippingCost",
+        "0"
     )
 
 
-    total_offers = 0
-
-
-    for product in products:
-
-
-        translations = get_translations(
-            product
-        )
-
-
-        original_title = product.get(
-            "title",
-            ""
-        )
-
-
-        original_description = product.get(
-            "descriptionHtml",
-            ""
-        )
-
-
-        # Shopify Translate & Adapt translation keys
-        title = translations.get(
-            "title",
-            original_title
-        )
-
-
-        description_html = translations.get(
-            "body_html",
-            original_description
-        )
-
-
-        description = clean_description(
-            description_html
-        )
-
-
-        handle = product.get(
-            "handle",
-            ""
-        )
-
-
-        vendor = product.get(
-            "vendor",
-            ""
-        )
-
-
-        brand = detect_brand(
-            original_title,
-            vendor
-        )
-
-
-        product_url = (
-
-
-            "https://saivera.net/it/products/"
-            + handle
-
-
-        )
-
-
-        images = (
-            product
-            .get("images", {})
-            .get("nodes", [])
-        )
-
-
-        default_image = ""
-
-
-        if images:
-
-
-            default_image = (
-                images[0]
-                .get("url", "")
-            )
-
-
-        variants = (
-            product
-            .get("variants", {})
-            .get("nodes", [])
-        )
-
-
-        for variant in variants:
-
-
-            offer = ET.SubElement(
-
-
-                root,
-
-
-                "Offer"
-
-
-            )
-
-
-            sku = variant.get(
-                "sku"
-            )
-
-            category = CATEGORY_RULES.get(
-                sku,
-                get_category(product)
-            )
-            if not sku:
-
-
-                sku = title
-
-
-            price = variant.get(
-                "price",
-                "0"
-            )
-
-
-            image = default_image
-
-
-            variant_image = (
-                variant.get(
-                    "image"
-                )
-            )
-
-
-            if variant_image:
-
-
-                image = (
-                    variant_image
-                    .get("url", "")
-                )
-
-
-            add_field(
-                offer,
-                "Name",
-                title
-            )
-
-
-            add_field(
-                offer,
-                "Brand",
-                brand
-            )
-
-
-            add_field(
-                offer,
-                "Description",
-                description
-            )
-
-
-            add_field(
-                offer,
-                "Price",
-                price
-            )
-
-
-            add_field(
-                offer,
-                "Code",
-                sku
-            )
-
-
-            add_field(
-                offer,
-                "Link",
-                product_url
-            )
-
-
-            add_field(
-                offer,
-                "Stock",
-                "disponibile"
-            )
-
-
-            add_field(
-                offer,
-                "Categories",
-                category
-            )
-
-
-            add_field(
-                offer,
-                "Image",
-                image
-            )
-
-
-            add_field(
-                offer,
-                "ShippingCost",
-                "0"
-            )
-
-
-            total_offers += 1
-
+def save_xml(root, filename):
 
     xml_string = ET.tostring(
         root,
         encoding="utf-8"
     )
 
-
     pretty_xml = (
-
-
         minidom
         .parseString(
             xml_string
@@ -664,46 +411,163 @@ def generate_feed():
             indent="  ",
             encoding="UTF-8"
         )
-
-
     )
 
-
     with open(
-
-
-        "trovaprezzi.xml",
-
-
+        filename,
         "wb"
-
-
     ) as file:
-
 
         file.write(
             pretty_xml
         )
 
 
-    print(
-        "Feed generated successfully."
+def generate_feed():
+
+    products = get_products()
+
+    italian_root = ET.Element(
+        "Products"
     )
 
+    english_root = ET.Element(
+        "Products"
+    )
+
+    total_offers = 0
+
+    for product in products:
+
+        translations = get_translations(
+            product
+        )
+
+        # Original English content
+        original_title = product.get(
+            "title",
+            ""
+        )
+
+        original_description = product.get(
+            "descriptionHtml",
+            ""
+        )
+
+        # Italian Translate & Adapt content
+        italian_title = translations.get(
+            "title",
+            original_title
+        )
+
+        italian_description_html = translations.get(
+            "body_html",
+            original_description
+        )
+
+        italian_description = clean_description(
+            italian_description_html
+        )
+
+        # English content
+        english_title = original_title
+
+        english_description = clean_description(
+            original_description
+        )
+
+        handle = product.get(
+            "handle",
+            ""
+        )
+
+        vendor = product.get(
+            "vendor",
+            ""
+        )
+
+        brand = detect_brand(
+            original_title,
+            vendor
+        )
+
+        # Italian URL
+        italian_url = (
+            "https://saivera.net/it/products/"
+            + handle
+        )
+
+        # English URL
+        english_url = (
+            "https://saivera.net/products/"
+            + handle
+        )
+
+        variants = (
+            product
+            .get("variants", {})
+            .get("nodes", [])
+        )
+
+        for variant in variants:
+
+            # Italian offer
+            generate_offer(
+                italian_root,
+                product,
+                variant,
+                italian_title,
+                italian_description,
+                italian_url,
+                brand
+            )
+
+            # English offer
+            generate_offer(
+                english_root,
+                product,
+                variant,
+                english_title,
+                english_description,
+                english_url,
+                brand
+            )
+
+            total_offers += 1
+
+    # Save Italian feed
+    save_xml(
+        italian_root,
+        "trovaprezzi.xml"
+    )
+
+    # Save English feed
+    save_xml(
+        english_root,
+        "trovaprezzi-en.xml"
+    )
+
+    print(
+        "Feeds generated successfully."
+    )
 
     print(
         f"Active products: {len(products)}"
     )
 
+    print(
+        f"Offers per feed: {total_offers}"
+    )
 
     print(
-        f"Total offers: {total_offers}"
+        "Italian feed: trovaprezzi.xml"
+    )
+
+    print(
+        "English feed: trovaprezzi-en.xml"
     )
 
 
-
-
 if __name__ == "__main__":
-
 
     generate_feed()
