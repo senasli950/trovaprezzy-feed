@@ -234,11 +234,9 @@ def get_category(product):
 
 def get_category_for_variant(product, sku):
 
-    # SKU-specific custom category has priority
-    if sku and sku in CATEGORY_RULES:
-        return CATEGORY_RULES[sku]
+    if sku and sku.strip().upper().startswith("XBOX-"):
+        return "Abbonamenti Gaming"
 
-    # Otherwise use Shopify category/custom category rules
     return get_category(product)
 
 
