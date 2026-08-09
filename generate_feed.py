@@ -122,6 +122,18 @@ query GetProducts($cursor: String) {
           sku
           price
 
+          inventoryItem {
+            tracked
+            inventoryLevels(first: 20) {
+              nodes {
+                quantities(names: ["available"]) {
+                  name
+                  quantity
+                }
+              }
+            }
+          }
+
           image {
             url
           }
@@ -218,6 +230,54 @@ def get_category_for_variant(product, sku):
         return CATEGORY_RULES[sku]
 
     return get_category(product)
+
+
+def get_stock_status(variant):
+
+    inventory_item = variant.get("inventoryItem")
+
+    # Inventory tracking is disabled
+    if not inventory_item:
+        return "disponibile"
+
+    tracked = inventory_item.get("tracked")
+
+    # Product is not using inventory tracking
+    if not tracked:
+        return "disponibile"
+
+    inventory_levels = (
+        inventory_item
+        .get("inventoryLevels", {})
+        .get("nodes", [])
+    )
+
+    total_available = 0
+    found_quantity = False
+
+    for level in inventory_levels:
+
+        quantities = level.get(
+            "quantities",
+            []
+        )
+
+        for quantity_data in quantities:
+
+            if quantity_data.get("name") == "available":
+
+                quantity = quantity_data.get(
+                    "quantity",
+                    0
+                )
+
+                total_available += quantity
+                found_quantity = True
+
+    if found_quantity and total_available > 0:
+        return "disponibile"
+
+    return "non disponibile"
 
 
 def get_products():
@@ -334,6 +394,10 @@ def generate_offer(
         sku
     )
 
+    stock_status = get_stock_status(
+        variant
+    )
+
     add_field(
         offer,
         "Name",
@@ -373,7 +437,7 @@ def generate_offer(
     add_field(
         offer,
         "Stock",
-        "disponibile"
+        stock_status
     )
 
     add_field(
