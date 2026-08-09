@@ -117,14 +117,15 @@ query GetProducts($cursor: String) {
         }
       }
 
-      variants(first: 100) {
+      variants(first: 1) {
         nodes {
           sku
           price
 
           inventoryItem {
             tracked
-            inventoryLevels(first: 20) {
+
+            inventoryLevels(first: 1) {
               nodes {
                 quantities(names: ["available"]) {
                   name
@@ -236,13 +237,15 @@ def get_stock_status(variant):
 
     inventory_item = variant.get("inventoryItem")
 
-    # Inventory tracking is disabled
+    # Safety fallback:
+    # if Shopify does not return inventory information,
+    # treat the product as available.
     if not inventory_item:
         return "disponibile"
 
     tracked = inventory_item.get("tracked")
 
-    # Product is not using inventory tracking
+    # Inventory tracking is disabled
     if not tracked:
         return "disponibile"
 
@@ -501,6 +504,9 @@ def generate_feed():
 
     total_offers = 0
 
+    available_offers = 0
+    unavailable_offers = 0
+
     for product in products:
 
         translations = get_translations(
@@ -575,6 +581,15 @@ def generate_feed():
 
         for variant in variants:
 
+            stock_status = get_stock_status(
+                variant
+            )
+
+            if stock_status == "disponibile":
+                available_offers += 1
+            else:
+                unavailable_offers += 1
+
             # Italian offer
             generate_offer(
                 italian_root,
@@ -621,6 +636,14 @@ def generate_feed():
 
     print(
         f"Offers per feed: {total_offers}"
+    )
+
+    print(
+        f"Available offers: {available_offers}"
+    )
+
+    print(
+        f"Unavailable offers: {unavailable_offers}"
     )
 
     print(
