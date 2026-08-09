@@ -208,6 +208,13 @@ def get_category(product):
     full_name = category.get("fullName")
     name = category.get("name")
 
+    # Custom category:
+    # Software > Video Game Software > Digital Video Games
+    # becomes:
+    # Video Games
+    if full_name == "Software > Video Game Software > Digital Video Games":
+        return "Video Games"
+
     if full_name:
 
         if " in " in full_name:
@@ -227,9 +234,11 @@ def get_category(product):
 
 def get_category_for_variant(product, sku):
 
+    # SKU-specific custom category has priority
     if sku and sku in CATEGORY_RULES:
         return CATEGORY_RULES[sku]
 
+    # Otherwise use Shopify category/custom category rules
     return get_category(product)
 
 
@@ -237,9 +246,7 @@ def get_stock_status(variant):
 
     inventory_item = variant.get("inventoryItem")
 
-    # Safety fallback:
-    # if Shopify does not return inventory information,
-    # treat the product as available.
+    # Safety fallback
     if not inventory_item:
         return "disponibile"
 
