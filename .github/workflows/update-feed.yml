@@ -44,7 +44,7 @@ jobs:
 
           git add trovaprezzi.xml
           git add trovaprezzi-en.xml
-          git add trovaprezzi-fr.xml
+          git add products-fr.xml
 
           git diff --cached --quiet || git commit -m "Update Trovaprezzi feeds"
 
