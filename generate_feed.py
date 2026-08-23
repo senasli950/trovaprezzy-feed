@@ -71,7 +71,7 @@ BRAND_RULES = [
 ]
 
 
-# Custom Trovaprezzi categories based on SKU
+# Custom Trovaprezzi categories
 CATEGORY_RULES = {
     "XBOX-GPE1": "Abbonamenti Gaming",
     "XBOX-GPU3": "Abbonamenti Gaming",
@@ -106,7 +106,12 @@ query GetProducts($cursor: String) {
         fullName
       }
 
-      translations(locale: "it") {
+      italianTranslations: translations(locale: "it") {
+        key
+        value
+      }
+
+      frenchTranslations: translations(locale: "fr") {
         key
         value
       }
@@ -146,11 +151,26 @@ query GetProducts($cursor: String) {
 """
 
 
-def get_translations(product):
+def get_translations(product, language):
 
     translations = {}
 
-    for translation in product.get("translations", []):
+    if language == "it":
+        translation_list = product.get(
+            "italianTranslations",
+            []
+        )
+
+    elif language == "fr":
+        translation_list = product.get(
+            "frenchTranslations",
+            []
+        )
+
+    else:
+        translation_list = []
+
+    for translation in translation_list:
 
         key = translation.get("key")
         value = translation.get("value")
@@ -234,6 +254,8 @@ def get_category(product):
 
 def get_category_for_variant(product, sku):
 
+    # Every SKU beginning with XBOX-
+    # gets the custom Trovaprezzi category
     if sku and sku.strip().upper().startswith("XBOX-"):
         return "Abbonamenti Gaming"
 
@@ -244,13 +266,12 @@ def get_stock_status(variant):
 
     inventory_item = variant.get("inventoryItem")
 
-    # Safety fallback
     if not inventory_item:
         return "disponibile"
 
     tracked = inventory_item.get("tracked")
 
-    # Inventory tracking is disabled
+    # Inventory tracking disabled
     if not tracked:
         return "disponibile"
 
@@ -507,6 +528,10 @@ def generate_feed():
         "Products"
     )
 
+    french_root = ET.Element(
+        "Products"
+    )
+
     total_offers = 0
 
     available_offers = 0
@@ -514,8 +539,16 @@ def generate_feed():
 
     for product in products:
 
-        translations = get_translations(
-            product
+        # Italian translations
+        italian_translations = get_translations(
+            product,
+            "it"
+        )
+
+        # French translations
+        french_translations = get_translations(
+            product,
+            "fr"
         )
 
         # Original English content
@@ -529,13 +562,13 @@ def generate_feed():
             ""
         )
 
-        # Italian Translate & Adapt content
-        italian_title = translations.get(
+        # Italian
+        italian_title = italian_translations.get(
             "title",
             original_title
         )
 
-        italian_description_html = translations.get(
+        italian_description_html = italian_translations.get(
             "body_html",
             original_description
         )
@@ -544,11 +577,26 @@ def generate_feed():
             italian_description_html
         )
 
-        # English content
+        # English
         english_title = original_title
 
         english_description = clean_description(
             original_description
+        )
+
+        # French
+        french_title = french_translations.get(
+            "title",
+            original_title
+        )
+
+        french_description_html = french_translations.get(
+            "body_html",
+            original_description
+        )
+
+        french_description = clean_description(
+            french_description_html
         )
 
         handle = product.get(
@@ -575,6 +623,12 @@ def generate_feed():
         # English URL
         english_url = (
             "https://saivera.net/products/"
+            + handle
+        )
+
+        # French URL
+        french_url = (
+            "https://saivera.net/fr/products/"
             + handle
         )
 
@@ -617,6 +671,17 @@ def generate_feed():
                 brand
             )
 
+            # French offer
+            generate_offer(
+                french_root,
+                product,
+                variant,
+                french_title,
+                french_description,
+                french_url,
+                brand
+            )
+
             total_offers += 1
 
     # Save Italian feed
@@ -629,6 +694,12 @@ def generate_feed():
     save_xml(
         english_root,
         "trovaprezzi-en.xml"
+    )
+
+    # Save French feed
+    save_xml(
+        french_root,
+        "trovaprezzi-fr.xml"
     )
 
     print(
@@ -657,6 +728,10 @@ def generate_feed():
 
     print(
         "English feed: trovaprezzi-en.xml"
+    )
+
+    print(
+        "French feed: trovaprezzi-fr.xml"
     )
 
 
