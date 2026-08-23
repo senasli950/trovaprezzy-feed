@@ -699,7 +699,7 @@ def generate_feed():
     # Save French feed
     save_xml(
         french_root,
-        "trovaprezzi-fr.xml"
+        "products-fr.xml"
     )
 
     print(
@@ -731,7 +731,7 @@ def generate_feed():
     )
 
     print(
-        "French feed: trovaprezzi-fr.xml"
+        "French feed: products-fr.xml"
     )
 
 
