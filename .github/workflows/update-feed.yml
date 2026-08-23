@@ -1,38 +1,30 @@
 name: Update Trovaprezzi Feed
 
-
 on:
   schedule:
     - cron: "0 */3 * * *"
 
-
   workflow_dispatch:
-
 
 permissions:
   contents: write
-
 
 jobs:
   update-feed:
     runs-on: ubuntu-latest
 
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-
 
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
 
-
       - name: Install dependencies
         run: |
           pip install requests
-
 
       - name: Generate feed
         env:
@@ -40,17 +32,20 @@ jobs:
         run: |
           python generate_feed.py
 
+      - name: Check generated feeds
+        run: |
+          echo "Generated files:"
+          ls -lh trovaprezzi*.xml
 
-      - name: Commit updated feed
+      - name: Commit updated feeds
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
+          git add trovaprezzi.xml
+          git add trovaprezzi-en.xml
+          git add trovaprezzi-fr.xml
 
-          git add trovaprezzi.xml trovaprezzi-en.xml
-
-
-          git diff --cached --quiet || git commit -m "Update Trovaprezzi feed"
-
+          git diff --cached --quiet || git commit -m "Update Trovaprezzi feeds"
 
           git push
