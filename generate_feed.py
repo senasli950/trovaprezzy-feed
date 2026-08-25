@@ -696,6 +696,11 @@ def generate_feed():
         "trovaprezzi-en.xml"
     )
 
+    save_xml(
+        english_root,
+        "product-en.xml"
+    )
+
     # Save French feed
     save_xml(
         french_root,
